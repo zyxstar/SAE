@@ -1,0 +1,12 @@
+name: zyxstar
+version: 1
+
+handlers:
+- url: /static/
+  static_path: static
+  
+- url: /loyaltyupd
+  static_path: loyaltyupd.html
+
+- url: /loyaltyupd.html
+  static_path: loyaltyupd.html

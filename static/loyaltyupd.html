@@ -1,0 +1,198 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <title>Generate Loyalty Updated Scripts</title>
+    <style type="text/css">
+        input[type='text'] {
+            width: 90%;
+        }
+
+        th {
+            text-align: left;
+        }
+
+        .longtxt {
+            width: 170px;
+        }
+
+        .middletxt {
+            width: 150px;
+        }
+
+        .shorttxt {
+            width: 100px;
+        }
+
+        form {
+            margin-bottom: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <table border="0" cellpadding="0" cellspacing="0">
+            <thead>
+                <tr>
+                    <th class="longtxt">卡号</th>
+                    <th class="longtxt">证件号</th>
+                    <th class="middletxt">姓名</th>
+                    <th class="shorttxt">生效日期</th>
+                    <th class="shorttxt">失效日期</th>
+                    <th class="shorttxt">
+                        <input type="button" id="btn_add" value="＋" /></th>
+                </tr>
+            </thead>
+        </table>
+    </div>
+    <div id="row_template" style="display: none">
+        <table border="0" cellpadding="0" cellspacing="0">
+            <tbody>
+                <tr>
+                    <td class="longtxt">
+                        <input type="text" name="txt_cardno" value="8000143012345678" /></td>
+                    <td class="longtxt">
+                        <input type="text" name="txt_icno" value="icno" /></td>
+                    <td class="middletxt">
+                        <input type="text" name="txt_name" value="name" /></td>
+                    <td class="shorttxt">
+                        <input type="text" name="txt_begdt" value="yyyy-mm-dd" /></td>
+                    <td class="shorttxt">
+                        <input type="text" name="txt_expdt" value="yyyy-mm-dd" /></td>
+                    <th class="shorttxt">
+                        <input type="button" name="btn_remove" value="－" /></th>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <br />
+    <input type="button" id="btn_gen" value="生成脚本" /><br />
+    <form name="form_out" action="http://zyxstar.sinaapp.com/echo" method="post" target="_self">
+        <input type="hidden" id="txt_filename" name="filename" />
+        <textarea rows="20" cols="100" id="txt_out" name="content"></textarea>
+        <br />
+        <input type="submit" value="下载文件" />
+    </form>
+</body>
+</html>
+
+<script type="text/javascript">
+    (function () {
+        if (typeof (String.prototype.trim) === "undefined") {
+            String.prototype.trim = function () {
+                return String(this).replace(/^\s+|\s+$/g, '');
+            };
+        }
+
+        function $(id) {
+            return document.getElementById(id);
+        }
+
+        function parse_cardno(cardno) {
+            cardno = cardno.replace(/\s+/g, '').replace(/-/g, '');
+            if (cardno.length == 16) {
+                return cardno.substring(0, 4) + "-" + cardno.substring(4, 8) + "-" + cardno.substring(8, 12) + "-" + cardno.substring(12, 16);
+            }
+            return cardno;
+        }
+
+        function parse_dt(dt) {
+            var items = dt.replace(/\./g, "-").replace(/\//g, "-").split('-');
+            var year = items[0].trim();
+            var month = items[1].trim();
+            var day = items[2].trim();
+            return year + "-" + (month.length == 1 ? "0" + month : month) + "-" + (day.length == 1 ? "0" + day : day);
+        }
+
+        function gen_script(cardno, icno, name, begdt, expdt) {
+            var template = "\
+UPDATE lyt_card \n\
+   SET begdt = TO_DATE ('$begdt 00:00:00', 'yyyy-mm-dd hh24:mi:ss'), \n\
+       expdt = TO_DATE ('$expdt 23:59:59', 'yyyy-mm-dd hh24:mi:ss'), \n\
+       name = '$name', \n\
+       icno = '$icno' \n\
+ WHERE cardno IN ('$cardno');\n\
+UPDATE lyt_cardgift \n\
+   SET expdt = TO_DATE ('$expdt 23:59:59', 'yyyy-mm-dd hh24:mi:ss') \n\
+ WHERE cardctlno IN (SELECT cardctlno \n\
+                       FROM lyt_card \n\
+                      WHERE cardno IN ('$cardno'));\n\
+COMMIT;\n";
+            return template.replace(/\$cardno/g, cardno).replace(/\$icno/g, icno).replace(/\$name/g, name).replace(/\$begdt/g, begdt).replace(/\$expdt/g, expdt);
+        }
+
+        var form_inc = (function () {
+            var _count = 0;
+            return function () {
+                return ++_count;
+            }
+        })();
+
+        function add_record() {
+            var row_template = $('row_template');
+            var container = $('container')
+            var form = document.createElement("FORM");
+            var formid = "form_" + form_inc();
+            form.id = form.name = formid;
+
+            form.innerHTML = row_template.innerHTML;
+            container.appendChild(form);
+            form["btn_remove"].onclick = function () {
+                if (confirm("真的删除？")) {
+                    form["btn_remove"].onclick=null;
+                    container.removeChild(form);
+                }
+            };
+        }
+
+        $('btn_add').onclick = add_record;
+
+        $('btn_gen').onclick = function () {
+
+            function format(date) {
+                function lpad(val) {
+                    return val < 10 ? '0' + val : val;
+                }
+                var h = [
+                    function () { return this.getFullYear(); },
+                    function () { return lpad(this.getMonth() + 1); },
+                    function () { return lpad(this.getDate()); },
+                    function () { return "T"; },
+                    function () { return lpad(this.getHours()); },
+                    function () { return lpad(this.getMinutes()); },
+                    function () { return lpad(this.getSeconds()); }
+                ];
+                var ret = [];
+                for (var i = 0; i < h.length; i++) {
+                    ret.push(h[i].call(date));
+                }
+                return ret.join('');
+            }
+
+            $("txt_filename").value = format(new Date()) + ".sql";
+
+            function val(form, field) {
+                return form[field].value.trim();
+            }
+            
+            var f;
+            var scripts = [];
+            for (var i = 0; i < document.forms.length; i++) {
+                f = document.forms[i];
+                if (f.name == "form_out") continue;
+                scripts.push("--" + (i + 1));
+                scripts.push(
+                    gen_script(
+                        parse_cardno(val(f, "txt_cardno")),
+                        val(f, "txt_icno"),
+                        val(f, "txt_name"),
+                        parse_dt(val(f, "txt_begdt")),
+                        parse_dt(val(f, "txt_expdt"))));
+            }
+            $("txt_out").value = scripts.join("\n");
+        };
+        add_record();
+
+    })();
+</script>
